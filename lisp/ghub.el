@@ -606,20 +606,7 @@ Signal an error if the id cannot be determined."
   (let ((raw (ghub--decode-payload)))
     (and raw
          (condition-case nil
-             (if (and ghub-json-use-jansson
-                      (fboundp 'json-parse-string))
-                 (json-parse-string
-                  raw
-                  :object-type  ghub-json-object-type
-                  :array-type   ghub-json-array-type
-                  :false-object nil
-                  :null-object  nil)
-               (require 'json)
-               (let ((json-object-type ghub-json-object-type)
-                     (json-array-type  ghub-json-array-type)
-                     (json-false       nil)
-                     (json-null        nil))
-                 (json-read-from-string raw)))
+             (ghub--json-parse-string raw)
            ((json-parse-error json-readtable-error)
             `((message
                . ,(if (looking-at "<!DOCTYPE html>")
@@ -641,24 +628,41 @@ Signal an error if the id cannot be determined."
   (and payload
        (progn
          (unless (stringp payload)
-           (setq payload
-                 (if (and ghub-json-use-jansson
-                          (fboundp 'json-serialize))
-                     (json-serialize payload
-                                     ;; :object-type and :array-type
-                                     ;; are not supported here.
-                                     :false-object nil
-                                     :null-object  :null)
-                   (require 'json)
-                   (let ((json-object-type ghub-json-object-type)
-                         (json-array-type  ghub-json-array-type)
-                         (json-false       nil)
-                         (json-null        :null))
-                     ;; Unfortunately `json-encode' may modify the input.
-                     ;; See https://debbugs.gnu.org/cgi/bugreport.cgi?bug=40693.
-                     ;; and https://github.com/magit/forge/issues/267
-                     (json-encode (copy-tree payload))))))
+           (setq payload (ghub--json-serialize payload)))
          (encode-coding-string payload 'utf-8))))
+
+(defun ghub--json-parse-string (string)
+  (if (and ghub-json-use-jansson
+           (fboundp 'json-parse-string))
+      (json-parse-string string
+                         :object-type  ghub-json-object-type
+                         :array-type   ghub-json-array-type
+                         :false-object nil
+                         :null-object  nil)
+    (require 'json)
+    (let ((json-object-type ghub-json-object-type)
+          (json-array-type  ghub-json-array-type)
+          (json-false       nil)
+          (json-null        nil))
+      (json-read-from-string string))))
+
+(defun ghub--json-serialize (object)
+  (if (and ghub-json-use-jansson
+           (fboundp 'json-serialize))
+      (json-serialize object
+                      ;; :object-type and :array-type
+                      ;; are not supported here.
+                      :false-object nil
+                      :null-object  :null)
+    (require 'json)
+    (let ((json-object-type ghub-json-object-type)
+          (json-array-type  ghub-json-array-type)
+          (json-false       nil)
+          (json-null        :null))
+      ;; Unfortunately `json-encode' may modify the input.
+      ;; See https://debbugs.gnu.org/cgi/bugreport.cgi?bug=40693.
+      ;; and https://github.com/magit/forge/issues/267
+      (json-encode (copy-tree object)))))
 
 (defun ghub--url-encode-params (params)
   (mapconcat (lambda (param)
